@@ -1,22 +1,26 @@
-# Lightweight CNN for CSI feedback
+# Lightweight CNN for CSI Feedback
 
-This project compresses channel state information (CSI) with an encoder and reconstructs it with a decoder. The input is a 32 x 32 matrix with two channels for its real and imaginary parts. The compressed vector has 1/CR as many values as the input, where CR is the compression ratio.
+This repository contains a lightweight convolutional autoencoder for compressing and reconstructing channel state information (CSI). The work uses CSI data generated in the **5G+/6G Wireless Research and Standardization Lab at IIT Kanpur**.
+
+Each CSI sample is represented as a `2 x 32 x 32` tensor, with separate channels for its real and imaginary components. The encoder maps the input to a lower-dimensional representation, and the decoder reconstructs the original CSI.
 
 ```text
-CSI (2 x 32 x 32) -> encoder -> compressed vector -> decoder -> reconstructed CSI
+CSI input -> encoder -> compressed representation -> decoder -> reconstructed CSI
 ```
 
-Despite the repository name, the notebooks do not predict future CSI. They train an autoencoder for reconstruction. The original notebooks remain in [`Lightweight_CNN/`](Lightweight_CNN/) for reference; the model and experiment code now live in `src/csi_reconstruction/`.
+The experiments compare compression ratios of `4`, `8`, `16`, `32`, and `64`. Although the repository retains its original name, the current model performs CSI compression and reconstruction rather than future-channel prediction. The original notebooks remain in [`Lightweight_CNN/`](Lightweight_CNN/) for reference, while the reusable model and experiment code lives in `src/csi_reconstruction/`.
 
 ## Data
 
-The dataset is not included. The notebooks load local MATLAB files, but do not identify a public download or record how the files were generated. To run the code, put training files in `data/train/` and held-out test files in `data/test/`. Each file needs a real-valued `x` array shaped `(samples, 2, 32, 32)`.
+The dataset was generated in the **5G+/6G Wireless Research and Standardization Lab at IIT Kanpur** and is not included in this repository.
 
-Training uses an 80/20 train/validation split with seed 42. One scale calculated from the training split is used for train, validation, and test data. The notebooks calculate a separate scale for each split, so results from this code need a fresh run and should not be mixed with old notebook results.
+To run the code, place the training files in `data/train/` and the held-out test files in `data/test/`. Each MATLAB file must contain a real-valued array named `x` with shape `(samples, 2, 32, 32)`.
 
-## Setup and run
+Training uses an 80/20 train/validation split with seed 42. A scale calculated from the training split is used consistently for training, validation, and testing.
 
-With Conda and Python 3.11:
+## Installation
+
+Create a Conda environment with Python 3.11 and install the project:
 
 ```bash
 conda create -n csi-reconstruction python=3.11
@@ -24,33 +28,35 @@ conda activate csi-reconstruction
 python -m pip install -e ".[test]"
 ```
 
-Train one compression ratio:
+## Training
+
+Train the model for one compression ratio:
 
 ```bash
 csi-train --train-dir data/train --output-dir runs/cr4 --compression-ratio 4 --epochs 200
 ```
 
-Evaluate the resulting checkpoint:
+Change `--compression-ratio` and the output directory to run experiments for the other compression ratios.
+
+Each run saves the checkpoint from the epoch with the lowest validation MSE, along with `config.json` for the experiment settings and `history.json` for the training and validation losses.
+
+## Evaluation
+
+Evaluate the resulting checkpoint on the test data:
 
 ```bash
 csi-evaluate --test-dir data/test --checkpoint runs/cr4/checkpoint.pt
 ```
 
-The checkpoint uses the epoch with the lowest validation MSE and stores the training scale. Each run also saves `config.json` and `history.json` with its settings and losses. Repeat with ratios `8`, `16`, `32`, and `64` to compare compression levels. `data/` and `runs/` are ignored by Git.
+Evaluation reports MSE on normalized inputs, NMSE in dB, the number of test samples, and the model parameter count. NMSE is calculated from the per-sample error-to-signal-power ratio and converted to dB.
 
-## What is measured
-
-Evaluation prints MSE on normalized inputs, NMSE in dB, test sample count, and parameter count. NMSE is the mean of the per-sample error-to-signal-power ratios, converted to dB. The channels are shifted by 0.5 before forming complex values, as in the notebooks.
-
-There is no results table yet because the dataset is unavailable here and the existing weight files lack the scale needed for a comparable test. The five saved weights under `Lightweight_CNN/Lightweight_CNN/Saved Model Parameters/` are retained, but `csi-evaluate` expects a new checkpoint made by `csi-train`.
-
-The next run should record the dataset source and split, NMSE for each compression ratio, a simple baseline, and the hardware used for any latency measurement.
+The saved parameters under `Lightweight_CNN/Lightweight_CNN/Saved Model Parameters/` come from the original notebook experiments. The evaluation command expects a checkpoint produced by the current `csi-train` workflow because that checkpoint also stores the training scale.
 
 ## Model notes
 
-The decoder has two convolution branches. Its last operation adds a tensor to itself before the sigmoid, as in the combined-dataset notebook. That may be an unintended residual connection, but changing it would make this a different model. The other notebook omits the sigmoid. The training command follows the combined-dataset version.
+The decoder uses two convolutional branches and follows the architecture in the combined-dataset notebook. The current implementation keeps the original final self-addition before the sigmoid so that the reorganized code remains consistent with that experiment.
 
-The code assumes a fixed 32 x 32 input and a MATLAB `x` key. It does not include dataset acquisition, temporal prediction, baselines, or validated results.
+The implementation currently assumes a fixed `32 x 32` CSI input and a MATLAB variable named `x`.
 
 ## Tests
 
